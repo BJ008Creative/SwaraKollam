@@ -8,7 +8,7 @@ Request:
 - Accepted formats: WAV, MP3, OGG, FLAC, M4A (M4A generally needs ffmpeg on
   the server; MP3 needs libsndfile >= 1.1 or ffmpeg)
 - Maximum size: `MAX_UPLOAD_MB` (default 15); analysed length: first
-  `MAX_AUDIO_SECONDS` (default 45)
+  `MAX_AUDIO_SECONDS` (default 180 seconds / 3 minutes)
 
 Response `200`:
 - `features`: extracted audio features, each with a confidence value

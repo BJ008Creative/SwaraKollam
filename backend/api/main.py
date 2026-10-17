@@ -23,7 +23,9 @@ app = FastAPI(
 
 MAX_UPLOAD_MB = int(os.getenv("MAX_UPLOAD_MB", "15"))
 MAX_UPLOAD_BYTES = MAX_UPLOAD_MB * 1024 * 1024
-MAX_AUDIO_SECONDS = float(os.getenv("MAX_AUDIO_SECONDS", "45"))
+# Analyse a full musical excerpt by default. Operators can lower this for
+# constrained deployments, while uploads remain bounded by MAX_UPLOAD_MB.
+MAX_AUDIO_SECONDS = float(os.getenv("MAX_AUDIO_SECONDS", "180"))
 READ_CHUNK = 1024 * 1024
 MULTIPART_SLACK = 1024 * 1024  # form boundaries and headers
 

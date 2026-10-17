@@ -10,7 +10,7 @@ SILENCE_PEAK = 1e-4
 
 def load_audio(
     path: str,
-    max_seconds: float = 45.0,
+    max_seconds: float = 180.0,
 ) -> tuple[np.ndarray, int]:
     """Decode, convert to mono, resample, trim silence, peak-normalise.
 

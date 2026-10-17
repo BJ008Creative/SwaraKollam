@@ -22,6 +22,7 @@ class FeatureVector(BaseModel):
     duration_seconds: float = Field(ge=0)
     # Quantised, tonic-relative pitch-class histogram; feeds the generator seed.
     contour_signature: str | None = None
+    ordered_contour_signature: str | None = None
     notes: list[str] = Field(default_factory=list)
 
 

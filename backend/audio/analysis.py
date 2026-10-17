@@ -66,11 +66,22 @@ def pitch_statistics(cents: np.ndarray, min_class_fraction: float = 0.03) -> dic
     hist = np.bincount(classes, minlength=12) / len(classes)
     distinct = int(np.sum(hist >= min_class_fraction))
     signature = "".join(f"{int(round(h * 20)):02d}" for h in hist)
+    # A pitch-class histogram loses phrase order. Sample the entire excerpt
+    # into a compact transposition-invariant contour for differentiated seeds.
+    contour = np.full(256, -1, dtype=np.int8)
+    positions = np.linspace(0, len(rel) - 1, len(contour)).round().astype(int)
+    sampled = rel[positions]
+    sampled_valid = np.isfinite(sampled)
+    contour[sampled_valid] = np.clip(
+        np.rint(sampled[sampled_valid] / 100.0), -24, 48
+    ).astype(np.int8)
+    ordered_signature = contour.tobytes().hex()
     return {
         "tonic_cents": tonic,
         "pitch_range_cents": round(pitch_range, 2),
         "distinct_pitch_count": distinct,
         "contour_signature": signature,
+        "ordered_contour_signature": ordered_signature,
     }
 
 

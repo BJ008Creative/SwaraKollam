@@ -42,7 +42,7 @@ def _extract_f0(y: np.ndarray, sr: int):
     return f0, np.asarray(voiced_prob, dtype=float)
 
 
-def analyze_audio(path: str, max_seconds: float = 45.0) -> dict:
+def analyze_audio(path: str, max_seconds: float = 180.0) -> dict:
     y, sr = load_audio(path, max_seconds)
     fps = sr / HOP_LENGTH
     notes = [
@@ -100,5 +100,6 @@ def analyze_audio(path: str, max_seconds: float = 45.0) -> dict:
         },
         "duration_seconds": round(len(y) / sr, 2),
         "contour_signature": stats["contour_signature"],
+        "ordered_contour_signature": stats["ordered_contour_signature"],
         "notes": notes,
     }

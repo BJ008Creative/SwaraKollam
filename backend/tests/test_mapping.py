@@ -78,3 +78,14 @@ def test_similar_pitch_shapes_share_a_seed_and_different_ones_do_not():
     c = map_features_to_params(dict(FEATURES, contour_signature="000000000000000000000020"))
     assert a.seed == b.seed
     assert a.seed != c.seed
+
+
+def test_ordered_contour_changes_seed_when_pitch_class_counts_match():
+    common = dict(FEATURES, contour_signature="same histogram")
+    ascending = map_features_to_params(
+        dict(common, ordered_contour_signature="ascending phrase")
+    )
+    descending = map_features_to_params(
+        dict(common, ordered_contour_signature="descending phrase")
+    )
+    assert ascending.seed != descending.seed

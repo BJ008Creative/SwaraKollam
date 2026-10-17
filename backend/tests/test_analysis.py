@@ -27,6 +27,7 @@ def test_tonic_is_recovered_and_stats_are_transposition_invariant():
     assert stats["distinct_pitch_count"] == 5
     for key in ("pitch_range_cents", "distinct_pitch_count", "contour_signature"):
         assert stats[key] == shifted[key]
+    assert stats["ordered_contour_signature"] == shifted["ordered_contour_signature"]
 
 
 def test_gamaka_separates_steady_from_ornamented_and_ignores_gaps():

@@ -38,7 +38,7 @@ def _confidence(features: dict, key: str) -> float:
 
 def _seed(features: dict, used: dict) -> int:
     """Stable seed from the quantised pitch contour (never Python's hash())."""
-    signature = features.get("contour_signature")
+    signature = features.get("ordered_contour_signature") or features.get("contour_signature")
     if signature:
         payload = {"sig": signature}
     else:

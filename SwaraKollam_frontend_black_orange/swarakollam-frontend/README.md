@@ -40,7 +40,7 @@ Open the local Vite URL printed in the terminal, normally `http://localhost:5173
 ## API contract used
 
 - `GET /health` — connection status.
-- `POST /generate` — multipart upload using the `audio` field. Backend defaults are 15 MB maximum and analysis of up to 45 seconds.
+- `POST /generate` — multipart upload using the `audio` field. Backend defaults are 15 MB maximum and analysis of up to 180 seconds (3 minutes).
 - Successful response must include `features`, `params`, and `kolam.svg`.
 
 The frontend's feature mapping panel reflects the backend output: pitch range + pitch classes → grid size; contour repetition → symmetry; gamaka + tempo → turn density; contour signature → seed; tempo + cycle estimate → crossing density. Confidence is shown separately for tempo, pitch and cycle.
