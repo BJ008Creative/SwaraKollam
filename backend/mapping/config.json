@@ -1,0 +1,14 @@
+{
+  "grid_sizes": [5, 7, 9, 11, 13],
+  "defaults": {
+    "tempo_bpm": 90,
+    "pitch_range_cents": 1200,
+    "distinct_pitch_count": 7,
+    "gamaka_intensity": 0.35,
+    "symmetry_score": 0.35
+  },
+  "symmetry_thresholds": {
+    "four_fold": 0.75,
+    "mirror": 0.4
+  }
+}
