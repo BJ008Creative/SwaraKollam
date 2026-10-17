@@ -1,4 +1,4 @@
-# Swara to Sikku
+# SwaraKollam
 
 **Music-driven procedural generation of Brahma Mudi (single-line Sikku Kolam) from Carnatic audio.**
 
