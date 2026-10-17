@@ -1,145 +1,104 @@
-import numpy as np
-import librosa
+"""Audio -> FeatureVector (as a plain dict).
 
+librosa is used for decoding, onset strength, tempo and pYIN; all other
+maths lives in ``audio.analysis`` so it can be tested without librosa.
+"""
+
+import librosa
+import numpy as np
+
+from audio import analysis
+from audio.errors import NoVoicedContentError
 from audio.preprocess import load_audio
 
-
-def clamp(value, low, high):
-    return max(low, min(high, float(value)))
-
-
-def estimate_pitch_features(y, sr, hop_length):
-    try:
-        f0, voiced_flag, voiced_prob = librosa.pyin(
-            y,
-            fmin=librosa.note_to_hz("C2"),
-            fmax=librosa.note_to_hz("C7"),
-            sr=sr,
-            frame_length=2048,
-            hop_length=hop_length
-        )
-
-        f0 = np.asarray(f0, dtype=float)
-        valid = f0[np.isfinite(f0) & (f0 > 0)]
-
-        if len(valid) < 5:
-            raise ValueError("Too few reliable pitch frames.")
-
-        midi = librosa.hz_to_midi(valid)
-
-        pitch_range = (
-            np.percentile(midi, 90)
-            - np.percentile(midi, 10)
-        ) * 100
-
-        distinct_pitches = len(
-            np.unique(np.round(midi))
-        )
-
-        differences = np.abs(np.diff(midi)) * 100
-        gamaka_proxy = clamp(
-            np.mean(differences > 35)
-            * np.percentile(differences, 75) / 250,
-            0,
-            1
-        )
-
-        confidence = float(np.mean(voiced_prob[
-            np.isfinite(f0)
-        ])) if np.any(np.isfinite(f0)) else 0.0
-
-        return {
-            "pitch_range_cents": round(float(pitch_range), 2),
-            "distinct_pitch_count": int(distinct_pitches),
-            "gamaka_intensity": round(gamaka_proxy, 4),
-            "pitch_confidence": round(clamp(confidence, 0, 1), 4),
-            "notes": [
-                "Pitch and gamaka values are heuristic estimates.",
-                "They are not Carnatic swara transcription."
-            ]
-        }
-
-    except Exception:
-        return {
-            "pitch_range_cents": 0.0,
-            "distinct_pitch_count": 0,
-            "gamaka_intensity": 0.0,
-            "pitch_confidence": 0.0,
-            "notes": [
-                "Reliable pitch could not be estimated; fallback values used."
-            ]
-        }
+HOP_LENGTH = 512
+MIN_VOICED_FRAMES = 25  # about 0.6 s of pitched sound
+LOW_VOICED_FRACTION = 0.10
 
 
-def estimate_symmetry(y, sr, hop_length):
-    chroma = librosa.feature.chroma_stft(
-        y=y,
+def _tempo(onset_env: np.ndarray, sr: int) -> float:
+    rhythm = getattr(librosa.feature, "rhythm", None)
+    tempo_fn = getattr(rhythm, "tempo", None) or librosa.feature.tempo
+    values = tempo_fn(onset_envelope=onset_env, sr=sr, hop_length=HOP_LENGTH)
+    return analysis.clamp(np.asarray(values).reshape(-1)[0], 30, 300)
+
+
+def _extract_f0(y: np.ndarray, sr: int):
+    """pYIN f0 (NaN where unvoiced) and the per-frame voicing probability.
+
+    CREPE (README 5.2) is not used: it would add a TensorFlow dependency.
+    pYIN is the documented fallback and is what runs here.
+    """
+    f0, voiced_flag, voiced_prob = librosa.pyin(
+        y,
+        fmin=librosa.note_to_hz("C2"),
+        fmax=librosa.note_to_hz("C6"),
         sr=sr,
-        hop_length=hop_length
+        frame_length=2048,
+        hop_length=HOP_LENGTH,
     )
-
-    series = np.mean(chroma, axis=0)
-
-    if len(series) < 8 or np.std(series) < 1e-8:
-        return 0.0
-
-    series = series - np.mean(series)
-    correlation = np.correlate(series, series, mode="full")
-    correlation = correlation[len(series) - 1:]
-
-    if correlation[0] <= 0:
-        return 0.0
-
-    correlation = correlation / correlation[0]
-    return round(clamp(np.max(correlation[2:]), 0, 1), 4)
+    f0 = np.asarray(f0, dtype=float)
+    f0[~np.asarray(voiced_flag, dtype=bool)] = np.nan
+    return f0, np.asarray(voiced_prob, dtype=float)
 
 
-def analyze_audio(
-    path: str,
-    max_seconds: float = 45.0
-) -> dict:
-
+def analyze_audio(path: str, max_seconds: float = 45.0) -> dict:
     y, sr = load_audio(path, max_seconds)
-    hop_length = 512
+    fps = sr / HOP_LENGTH
+    notes = [
+        "Pitch, gamaka, symmetry and cycle values are heuristic estimates, "
+        "not Carnatic swara or tala transcription.",
+    ]
 
-    onset_env = librosa.onset.onset_strength(
-        y=y,
-        sr=sr,
-        hop_length=hop_length
+    f0, voiced_prob = _extract_f0(y, sr)
+    cents = analysis.hz_to_cents(f0)
+    voiced = np.isfinite(cents)
+    voiced_count = int(voiced.sum())
+    if voiced_count < MIN_VOICED_FRAMES:
+        raise NoVoicedContentError("No voiced (pitched) content was detected.")
+
+    voiced_fraction = voiced_count / len(cents)
+    if voiced_fraction < LOW_VOICED_FRACTION:
+        notes.append("Little pitched content found; pitch features are unreliable.")
+    pitch_conf = analysis.clamp(
+        float(np.mean(voiced_prob[voiced])) * min(1.0, voiced_fraction / 0.25), 0, 1
     )
 
-    tempo_values = librosa.feature.tempo(
-        onset_envelope=onset_env,
-        sr=sr,
-        hop_length=hop_length
-    )
+    stats = analysis.pitch_statistics(cents)
+    gamaka = analysis.gamaka_intensity(cents, fps)
+    symmetry = analysis.symmetry_score(cents, fps)
 
-    tempo = clamp(
-        np.asarray(tempo_values).reshape(-1)[0],
-        30,
-        300
-    )
+    onset_env = librosa.onset.onset_strength(y=y, sr=sr, hop_length=HOP_LENGTH)
+    if len(onset_env) > 10 and float(np.std(onset_env)) > 1e-8:
+        tempo = _tempo(onset_env, sr)
+        tempo_conf = analysis.tempo_confidence(onset_env, fps, tempo)
+        cycle, cycle_conf = analysis.estimate_cycle(onset_env, fps, tempo)
+    else:
+        tempo, tempo_conf, cycle, cycle_conf = 90.0, 0.0, None, 0.0
+        notes.append("No usable onsets found; tempo defaulted.")
 
-    pitch = estimate_pitch_features(y, sr, hop_length)
-    symmetry = estimate_symmetry(y, sr, hop_length)
-
-    # This is a repetition proxy, not reliable tala recognition.
-    cycle_beats = None
+    if tempo_conf < 0.15:
+        notes.append(
+            "Tempo confidence is low (free-time or unpulsed music); the mapping "
+            "falls back to default tempo."
+        )
+    if cycle is None:
+        notes.append("No repeating cycle was detected.")
+    notes.append("The tonic (Sa) is taken as the dominant stable pitch class.")
 
     return {
         "tempo_bpm": round(tempo, 2),
-        "cycle_beats": cycle_beats,
-        "pitch_range_cents": pitch["pitch_range_cents"],
-        "distinct_pitch_count": pitch["distinct_pitch_count"],
-        "gamaka_intensity": pitch["gamaka_intensity"],
+        "cycle_beats": cycle,
+        "pitch_range_cents": stats["pitch_range_cents"],
+        "distinct_pitch_count": stats["distinct_pitch_count"],
+        "gamaka_intensity": gamaka,
         "symmetry_score": symmetry,
         "confidence": {
-            "tempo": 0.5 if len(onset_env) > 10 else 0.0,
-            "pitch": pitch["pitch_confidence"]
+            "tempo": tempo_conf,
+            "pitch": round(pitch_conf, 4),
+            "cycle": cycle_conf,
         },
         "duration_seconds": round(len(y) / sr, 2),
-        "notes": pitch["notes"] + [
-            "Tempo is estimated from onset strength.",
-            "Tala/cycle detection has not yet been implemented."
-        ]
+        "contour_signature": stats["contour_signature"],
+        "notes": notes,
     }

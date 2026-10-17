@@ -2,10 +2,38 @@
   "grid_sizes": [5, 7, 9, 11, 13],
   "defaults": {
     "tempo_bpm": 90,
+    "cycle_beats": 8,
     "pitch_range_cents": 1200,
     "distinct_pitch_count": 7,
     "gamaka_intensity": 0.35,
     "symmetry_score": 0.35
+  },
+  "confidence_min": {
+    "tempo": 0.15,
+    "pitch": 0.25,
+    "cycle": 0.15
+  },
+  "ranges": {
+    "pitch_range_max_cents": 3600,
+    "distinct_min": 3,
+    "distinct_max": 12,
+    "tempo_min": 50,
+    "tempo_max": 250,
+    "cycle_max_beats": 32
+  },
+  "grid_weights": {
+    "pitch_range": 0.55,
+    "distinct_pitches": 0.45
+  },
+  "turn_density": {
+    "base": 0.15,
+    "gamaka": 0.55,
+    "tempo": 0.30
+  },
+  "crossing_density": {
+    "base": 0.30,
+    "tempo": 0.40,
+    "cycle": 0.20
   },
   "symmetry_thresholds": {
     "four_fold": 0.75,

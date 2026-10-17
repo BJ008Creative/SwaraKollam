@@ -1,92 +1,55 @@
-import math
+"""Public entry point of the kolam module.
 
+``generate_kolam`` builds a single-closed-curve Brahma Mudi on the mirror
+lattice, validates it independently, and only then returns it.  A kolam that
+fails validation is never returned: ``KolamGenerationError`` is raised instead.
+"""
+
+from kolam.builder import KolamGenerationError, build_kolam
+from kolam.render import render_svg
 from schemas import KolamParams, KolamResult
+
+__all__ = ["generate_kolam", "KolamGenerationError"]
 
 
 def generate_kolam(params: KolamParams) -> KolamResult:
-    canvas = 600
-    center = canvas / 2
+    core = build_kolam(
+        n=params.grid_size,
+        symmetry=params.symmetry,
+        turn_density=params.turn_density,
+        crossing_density=params.crossing_density,
+        seed=params.seed,
+    )
+    lattice = core.lattice
+    points = [lattice.pts[v] for v in core.loop]
 
-    radius = 205
-    sample_count = 720
+    path = [[x / 2, y / 2] for x, y in points]
+    path.append(list(path[0]))  # explicit closure for polyline renderers
 
-    # The mapped parameters affect the shape.
-    lobes = 2 + round(params.turn_density * 5)
-    depth = 0.08 + params.turn_density * 0.18
+    svg, curve_d = render_svg(params.grid_size, points)
 
-    phase = (params.seed % 360) * math.pi / 180
-
-    path = []
-
-    for i in range(sample_count + 1):
-        t = 2 * math.pi * i / sample_count + phase
-
-        r = radius * (1 + depth * math.cos(lobes * t))
-
-        x = center + r * math.cos(t)
-        y = center + r * math.sin(t)
-
-        path.append([round(x, 3), round(y, 3)])
-
-    # SVG Z closes the path.
-    path_data = "M " + " L ".join(
-        f"{x},{y}" for x, y in path[:-1]
-    ) + " Z"
-
-    # Draw a regular grid of pullis.
-    size = params.grid_size
-    spacing = min(30, 230 / max(size - 1, 1))
-    start = center - (size - 1) * spacing / 2
-
-    dots = []
-
-    for row in range(size):
-        for col in range(size):
-            x = start + col * spacing
-            y = start + row * spacing
-
-            dots.append(
-                f'<circle cx="{x:.2f}" cy="{y:.2f}" '
-                f'r="2.8" fill="#b77935"/>'
-            )
-
-    svg = f"""
-    <svg xmlns="http://www.w3.org/2000/svg"
-         viewBox="0 0 600 600"
-         role="img"
-         aria-label="Kolam generation prototype">
-        <rect width="600" height="600" fill="#fffdf8"/>
-        <g>{''.join(dots)}</g>
-        <path d="{path_data}"
-              fill="none"
-              stroke="#262626"
-              stroke-width="2.5"
-              stroke-linecap="round"
-              stroke-linejoin="round"/>
-    </svg>
-    """
-
-    # Numerical closure alone does not prove Brahma Mudi validity.
-    closed = path[0] == path[-1]
-
-    validation = {
-        "closed_path": closed,
-        "single_path_rendered": True,
-        "every_pulli_encircled": False,
-        "mirror_model_topology_checked": False,
-        "traditional_brahma_mudi_validity": False
-    }
+    message = (
+        "Valid single closed curve in the mirror-lattice model: every lattice "
+        "segment is traced once and every pulli is enclosed."
+    )
+    if core.symmetry_applied != core.symmetry_requested:
+        message += (
+            f" Requested symmetry '{core.symmetry_requested}' could not be "
+            f"combined with a single closed curve for these parameters; "
+            f"'{core.symmetry_applied}' was applied instead."
+        )
 
     return KolamResult(
-        grid_size=size,
+        grid_size=params.grid_size,
         path=path,
-        closed=closed,
-        validated=False,
+        closed=core.validation["closed_path"],
+        validated=core.valid,
         svg=svg,
-        validation=validation,
-        message=(
-            "Prototype renderer only. Implement and test the mirror-model "
-            "generator and pulli-encirclement validator before claiming "
-            "traditional Brahma Mudi validity."
-        )
+        curve_path=curve_d,
+        validation=core.validation,
+        symmetry_requested=core.symmetry_requested,
+        symmetry_applied=core.symmetry_applied,
+        attempts=core.attempts,
+        repairs=core.repairs,
+        message=message,
     )
